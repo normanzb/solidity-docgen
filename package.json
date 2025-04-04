@@ -1,5 +1,5 @@
 {
-  "name": "solidity-docgen",
+  "name": "@normx/solidity-docgen",
   "version": "0.5.18",
   "description": "Solidity API documentation automatic generator.",
   "repository": "github:OpenZeppelin/solidity-docgen",
