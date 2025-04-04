@@ -1,39 +1,42 @@
-import { flatten, uniqBy, groupBy, defaults } from 'lodash';
-import path from 'path';
-import { memoize } from './memoize';
+import { flatten, uniqBy, groupBy, defaults } from "lodash";
+import path from "path";
+import never from "never";
+import { memoize } from "./memoize";
 
 type ContractTemplate = (contract: SourceContract) => string;
 
-import { slug } from './handlebars';
-import { SolcOutput, ast } from './solc';
+import { slug } from "./handlebars";
+import { SolcOutput, ast } from "./solc";
 
 export class Source {
   constructor(
     private readonly contractsDir: string,
     private readonly solcOutput: SolcOutput,
-    readonly contractTemplate: ContractTemplate,
-  ) { }
+    readonly contractTemplate: ContractTemplate
+  ) {}
 
   get contracts(): SourceContract[] {
-    return flatten(this.files.map(file => file.contracts));
+    return flatten(this.files.map((file) => file.contracts));
   }
 
   get files(): SourceFile[] {
-    return Object.keys(this.solcOutput.sources)
-      .map(fileName => this.file(fileName));
+    return Object.keys(this.solcOutput.sources).map((fileName) =>
+      this.file(fileName)
+    );
   }
 
   @memoize
   file(fileName: string): SourceFile {
     return new SourceFile(
       this,
-      this.solcOutput.sources[fileName].ast,
-      path.relative(this.contractsDir, fileName),
+      this.solcOutput.sources[fileName]?.ast ??
+        never(`No ast for file ${fileName}`),
+      path.relative(this.contractsDir, fileName)
     );
   }
 
   fileById(id: number): SourceFile {
-    const file = this.files.find(f => f.astId === id);
+    const file = this.files.find((f) => f.astId === id);
 
     if (file === undefined) {
       throw new Error(`File with id ${id} not found`);
@@ -43,7 +46,7 @@ export class Source {
   }
 
   contractById(id: number): SourceContract {
-    const contract = this.contracts.find(c => c.astId === id);
+    const contract = this.contracts.find((c) => c.astId === id);
 
     if (contract === undefined) {
       throw new Error(`Contract with id ${id} not found`);
@@ -57,16 +60,14 @@ class SourceFile {
   constructor(
     readonly source: Source,
     readonly ast: ast.SourceUnit,
-    readonly path: string,
-  ) { }
+    readonly path: string
+  ) {}
 
   @memoize
   get contracts(): SourceContract[] {
     const astNodes = this.ast.nodes.filter(isContractDefinition);
 
-    return astNodes.map(node => 
-      new SourceContract(this.source, this, node)
-    );
+    return astNodes.map((node) => new SourceContract(this.source, this, node));
   }
 
   @memoize
@@ -82,11 +83,13 @@ class SourceFile {
 function contractsInScope(
   file: SourceFile,
   stack = new Set<SourceFile>(),
-  aliasedImport = false,
+  aliasedImport = false
 ): Record<string, SourceContract> {
   if (stack.has(file)) {
     if (aliasedImport) {
-      throw new Error('Circular dependency detected: aliased imports not supported');
+      throw new Error(
+        "Circular dependency detected: aliased imports not supported"
+      );
     } else {
       return {};
     }
@@ -103,15 +106,23 @@ function contractsInScope(
   const imports = file.ast.nodes.filter(isImportDirective);
   for (const i of imports) {
     const importedFile = file.source.fileById(i.sourceUnit);
-    const importedScope = contractsInScope(importedFile, stack, aliasedImport || i.symbolAliases.length > 0);
+    const importedScope = contractsInScope(
+      importedFile,
+      stack,
+      aliasedImport || i.symbolAliases.length > 0
+    );
     if (i.symbolAliases.length === 0) {
       Object.assign(scope, importedScope);
     } else {
       for (const a of i.symbolAliases) {
-        scope[a.local ?? a.foreign.name] = importedScope[a.foreign.name];
+        const importedA = importedScope[a.foreign.name];
+        if (!importedA) {
+          continue;
+        }
+        scope[a.local ?? a.foreign.name] = importedA ?? a.foreign;
       }
     }
-  };
+  }
 
   stack.delete(file);
 
@@ -128,8 +139,8 @@ export class SourceContract implements Linkable {
   constructor(
     private readonly source: Source,
     readonly file: SourceFile,
-    private readonly astNode: ast.ContractDefinition,
-  ) { }
+    private readonly astNode: ast.ContractDefinition
+  ) {}
 
   toString(): string {
     return this.source.contractTemplate(this);
@@ -160,27 +171,26 @@ export class SourceContract implements Linkable {
   }
 
   get inheritance(): SourceContract[] {
-    return this.astNode.linearizedBaseContracts.map(id =>
+    return this.astNode.linearizedBaseContracts.map((id) =>
       this.source.contractById(id)
     );
   }
 
   get variables(): SourceStateVariable[] {
-    return flatten(this.inheritance.map(c => c.ownVariables));
+    return flatten(this.inheritance.map((c) => c.ownVariables));
   }
 
   @memoize
   get ownVariables(): SourceStateVariable[] {
     return this.astNode.nodes
       .filter(isVariableDeclaration)
-      .filter(n => n.visibility !== 'private')
-      .map(n => new SourceStateVariable(this, n));
+      .filter((n) => n.visibility !== "private")
+      .map((n) => new SourceStateVariable(this, n));
   }
 
   get functions(): SourceFunction[] {
-    return uniqBy(
-      flatten(this.inheritance.map(c => c.ownFunctions)),
-      f => f.name === 'constructor' ? 'constructor' : f.signature,
+    return uniqBy(flatten(this.inheritance.map((c) => c.ownFunctions)), (f) =>
+      f.name === "constructor" ? "constructor" : f.signature
     );
   }
 
@@ -188,42 +198,42 @@ export class SourceContract implements Linkable {
   get ownFunctions(): SourceFunction[] {
     return this.astNode.nodes
       .filter(isFunctionDefinition)
-      .filter(n => n.visibility !== 'private')
-      .map(n => new SourceFunction(this, n))
-      .filter(f => !f.isTrivialConstructor);
+      .filter((n) => n.visibility !== "private")
+      .map((n) => new SourceFunction(this, n))
+      .filter((f) => !f.isTrivialConstructor);
   }
 
   @memoize
   get privateFunctions(): SourceFunction[] {
     return this.astNode.nodes
       .filter(isFunctionDefinition)
-      .filter(n => n.visibility === 'private')
-      .map(n => new SourceFunction(this, n));
+      .filter((n) => n.visibility === "private")
+      .map((n) => new SourceFunction(this, n));
   }
 
   get inheritedItems(): InheritedItems[] {
-    const variables = groupBy(this.variables, f => f.contract.astId);
-    const functions = groupBy(this.functions, f => f.contract.astId);
-    const events = groupBy(this.events, f => f.contract.astId);
-    const modifiers = groupBy(this.modifiers, f => f.contract.astId);
-    const structs = groupBy(this.structs, f => f.contract.astId);
-    const enums = groupBy(this.enums, f => f.contract.astId);
+    const variables = groupBy(this.variables, (f) => f.contract.astId);
+    const functions = groupBy(this.functions, (f) => f.contract.astId);
+    const events = groupBy(this.events, (f) => f.contract.astId);
+    const modifiers = groupBy(this.modifiers, (f) => f.contract.astId);
+    const structs = groupBy(this.structs, (f) => f.contract.astId);
+    const enums = groupBy(this.enums, (f) => f.contract.astId);
 
-    return this.inheritance.map(contract => ({
+    return this.inheritance.map((contract) => ({
       contract,
-      variables: variables[contract.astId],
-      functions: functions[contract.astId],
-      events: events[contract.astId],
-      modifiers: modifiers[contract.astId],
-      structs: structs[contract.astId],
-      enums: enums[contract.astId],
+      variables: variables[contract.astId] ?? [],
+      functions: functions[contract.astId] ?? [],
+      events: events[contract.astId] ?? [],
+      modifiers: modifiers[contract.astId] ?? [],
+      structs: structs[contract.astId] ?? [],
+      enums: enums[contract.astId] ?? [],
     }));
   }
 
   get events(): SourceEvent[] {
     return uniqBy(
-      flatten(this.inheritance.map(c => c.ownEvents)),
-      f => f.signature,
+      flatten(this.inheritance.map((c) => c.ownEvents)),
+      (f) => f.signature
     );
   }
 
@@ -231,13 +241,13 @@ export class SourceContract implements Linkable {
   get ownEvents(): SourceEvent[] {
     return this.astNode.nodes
       .filter(isEventDefinition)
-      .map(n => new SourceEvent(this, n));
+      .map((n) => new SourceEvent(this, n));
   }
 
   get modifiers(): SourceModifier[] {
     return uniqBy(
-      flatten(this.inheritance.map(c => c.ownModifiers)),
-      f => f.signature,
+      flatten(this.inheritance.map((c) => c.ownModifiers)),
+      (f) => f.signature
     );
   }
 
@@ -245,34 +255,37 @@ export class SourceContract implements Linkable {
   get ownModifiers(): SourceModifier[] {
     return this.astNode.nodes
       .filter(isModifierDefinition)
-      .map(n => new SourceModifier(this, n));
+      .map((n) => new SourceModifier(this, n));
   }
 
   get structs(): SourceStruct[] {
-    return flatten(this.inheritance.map(c => c.ownStructs));
+    return flatten(this.inheritance.map((c) => c.ownStructs));
   }
 
   @memoize
   get ownStructs(): SourceStruct[] {
     return this.astNode.nodes
       .filter(isStructDefinition)
-      .map(n => new SourceStruct(this, n))
+      .map((n) => new SourceStruct(this, n));
   }
 
   get enums(): SourceEnum[] {
-    return flatten(this.inheritance.map(c => c.ownEnums));
+    return flatten(this.inheritance.map((c) => c.ownEnums));
   }
 
   @memoize
   get ownEnums(): SourceEnum[] {
     return this.astNode.nodes
       .filter(isEnumDefinition)
-      .map(n => new SourceEnum(this, n))
+      .map((n) => new SourceEnum(this, n));
   }
 
   @memoize
   get natspec(): NatSpec {
-    if (this.astNode.documentation === null || this.astNode.documentation === undefined) {
+    if (
+      this.astNode.documentation === null ||
+      this.astNode.documentation === undefined
+    ) {
       return {};
     }
 
@@ -285,11 +298,12 @@ export class SourceContract implements Linkable {
 }
 
 abstract class SourceContractItem implements Linkable {
-  protected abstract astNode: Exclude<ast.ContractItem, ast.VariableDeclaration>;
+  protected abstract astNode: Exclude<
+    ast.ContractItem,
+    ast.VariableDeclaration
+  >;
 
-  constructor(
-    readonly contract: SourceContract,
-  ) { }
+  constructor(readonly contract: SourceContract) {}
 
   get name(): string {
     return this.astNode.name;
@@ -305,11 +319,12 @@ abstract class SourceContractItem implements Linkable {
 }
 
 abstract class SourceFunctionLike extends SourceContractItem {
-  protected abstract astNode: ast.FunctionDefinition | ast.ModifierDefinition | ast.EventDefinition;
+  protected abstract astNode:
+    | ast.FunctionDefinition
+    | ast.ModifierDefinition
+    | ast.EventDefinition;
 
-  constructor(
-    readonly contract: SourceContract,
-  ) {
+  constructor(readonly contract: SourceContract) {
     super(contract);
   }
 
@@ -319,18 +334,19 @@ abstract class SourceFunctionLike extends SourceContractItem {
 
   @memoize
   get args(): SourceTypedVariable[] {
-    return SourceTypedVariableArray.fromParameterList(
-      this.astNode.parameters,
-    );
+    return SourceTypedVariableArray.fromParameterList(this.astNode.parameters);
   }
 
   get signature(): string {
-    return `${this.name}(${this.args.map(a => a.type).join(',')})`;
+    return `${this.name}(${this.args.map((a) => a.type).join(",")})`;
   }
 
   @memoize
   get natspec(): NatSpec {
-    if (this.astNode.documentation === null || this.astNode.documentation === undefined) {
+    if (
+      this.astNode.documentation === null ||
+      this.astNode.documentation === undefined
+    ) {
       return {};
     }
 
@@ -341,19 +357,19 @@ abstract class SourceFunctionLike extends SourceContractItem {
 class SourceStateVariable implements Linkable {
   constructor(
     readonly contract: SourceContract,
-    protected readonly astNode: ast.VariableDeclaration,
-  ) { }
+    protected readonly astNode: ast.VariableDeclaration
+  ) {}
 
   get name(): string {
     return this.astNode.name;
   }
 
   get fullName(): string {
-    return `${this.contract.name}.${this.name}`
+    return `${this.contract.name}.${this.name}`;
   }
 
   get anchor(): string {
-    return `${this.contract.name}-${this.name}-${slug(this.type)}`
+    return `${this.contract.name}-${this.name}-${slug(this.type)}`;
   }
 
   get type(): string {
@@ -366,15 +382,15 @@ class SourceStateVariable implements Linkable {
 
   get natspec(): {} {
     warnStateVariableNatspec();
-    return {}
+    return {};
   }
 }
 
 class SourceStructVariable {
   constructor(
     readonly struct: SourceStruct,
-    protected readonly astNode: ast.VariableDeclaration,
-  ) { }
+    protected readonly astNode: ast.VariableDeclaration
+  ) {}
 
   get name(): string {
     return this.astNode.name;
@@ -383,19 +399,31 @@ class SourceStructVariable {
   get type(): string {
     return this.astNode.typeName.typeDescriptions.typeString;
   }
+
+  @memoize
+  get natspec(): NatSpec {
+    if (
+      this.astNode.documentation === null ||
+      this.astNode.documentation === undefined
+    ) {
+      return {};
+    }
+
+    return parseNatSpec(this.astNode.documentation, this);
+  }
 }
 
 class SourceFunction extends SourceFunctionLike {
   constructor(
     contract: SourceContract,
-    protected readonly astNode: ast.FunctionDefinition,
+    protected readonly astNode: ast.FunctionDefinition
   ) {
     super(contract);
   }
 
   get name(): string {
     const { name, kind } = this.astNode;
-    const isRegularFunction = kind === 'function';
+    const isRegularFunction = kind === "function";
     return isRegularFunction ? name : kind;
   }
 
@@ -406,7 +434,7 @@ class SourceFunction extends SourceFunctionLike {
     );
   }
 
-  get visibility(): 'internal' | 'external' | 'public' | 'private' {
+  get visibility(): "internal" | "external" | "public" | "private" {
     return this.astNode.visibility;
   }
 
@@ -423,7 +451,7 @@ class SourceFunction extends SourceFunctionLike {
 class SourceEvent extends SourceFunctionLike {
   constructor(
     contract: SourceContract,
-    protected readonly astNode: ast.EventDefinition,
+    protected readonly astNode: ast.EventDefinition
   ) {
     super(contract);
   }
@@ -432,7 +460,7 @@ class SourceEvent extends SourceFunctionLike {
 class SourceModifier extends SourceFunctionLike {
   constructor(
     contract: SourceContract,
-    protected readonly astNode: ast.ModifierDefinition,
+    protected readonly astNode: ast.ModifierDefinition
   ) {
     super(contract);
   }
@@ -441,46 +469,46 @@ class SourceModifier extends SourceFunctionLike {
 class SourceStruct extends SourceContractItem {
   constructor(
     contract: SourceContract,
-    protected readonly astNode: ast.StructDefinition,
+    protected readonly astNode: ast.StructDefinition
   ) {
     super(contract);
   }
 
   @memoize
   get members(): SourceStructVariable[] {
-    return this.astNode.members.map(m => new SourceStructVariable(this, m));
+    return this.astNode.members.map((m) => new SourceStructVariable(this, m));
   }
 
   get natspec(): {} {
     warnStateVariableNatspec();
-    return {}
+    return {};
   }
 }
 
 class SourceEnum extends SourceContractItem {
   constructor(
     contract: SourceContract,
-    protected readonly astNode: ast.EnumDefinition,
+    protected readonly astNode: ast.EnumDefinition
   ) {
     super(contract);
   }
 
   @memoize
   get members(): string[] {
-    return this.astNode.members.map(m => m.name);
+    return this.astNode.members.map((m) => m.name);
   }
 
   get natspec(): {} {
     warnStateVariableNatspec();
-    return {}
+    return {};
   }
 }
 
 class SourceTypedVariable {
   constructor(
     private readonly typeNode: ast.TypeName,
-    readonly name?: string,
-  ) { }
+    readonly name?: string
+  ) {}
 
   get type(): string {
     return this.typeNode.typeDescriptions.typeString;
@@ -493,7 +521,7 @@ class SourceTypedVariable {
 
   toString(): string {
     if (this.name) {
-      return [this.type, this.name].join(' ');
+      return [this.type, this.name].join(" ");
     } else {
       return this.type;
     }
@@ -512,28 +540,27 @@ interface InheritedItems {
 
 class PrettyArray<T extends ToString> extends Array<T> {
   toString() {
-    return this.map(e => e.toString()).join(', ');
+    return this.map((e) => e.toString()).join(", ");
   }
 }
 
 class SourceTypedVariableArray extends PrettyArray<SourceTypedVariable> {
-  static fromParameterList(parameters: ast.ParameterList): SourceTypedVariable[] {
+  static fromParameterList(
+    parameters: ast.ParameterList
+  ): SourceTypedVariable[] {
     return SourceTypedVariableArray.from(
-      parameters.parameters.map(p =>
-        new SourceTypedVariable(
-          p.typeName,
-          p.name || undefined,
-        )
+      parameters.parameters.map(
+        (p) => new SourceTypedVariable(p.typeName, p.name || undefined)
       )
     );
   }
 
   get types(): string[] {
-    return this.map(v => v.type);
+    return this.map((v) => v.type);
   }
 
   get names(): string[] {
-    return this.map(v => (v.name === undefined) ? '_' : v.name);
+    return this.map((v) => (v.name === undefined ? "_" : v.name));
   }
 }
 
@@ -554,52 +581,68 @@ interface NatSpec {
   };
 }
 
-function parseNatSpec(doc: string, context: SourceFunctionLike | SourceContract): NatSpec {
+function parseNatSpec(
+  doc: string,
+  context: SourceFunctionLike | SourceContract | SourceStructVariable
+): NatSpec {
   const res: NatSpec = {};
 
-  const tagMatches = execall(/^(?:@(\w+|custom:[a-z][a-z-]*) )?((?:(?!^@(?:\w+|custom:[a-z][a-z-]*) )[^])*)/m, doc);
+  const tagMatches = execall(
+    /^(?:@(\w+|custom:[a-z][a-z-]*) )?((?:(?!^@(?:\w+|custom:[a-z][a-z-]*) )[^])*)/m,
+    doc
+  );
 
   let inheritFrom: SourceFunction | undefined;
 
   for (const [, tag, content] of tagMatches) {
-    if (tag === 'dev') {
-      res.devdoc ??= '';
+    if (!content) {
+      continue;
+    }
+
+    if (tag === "dev") {
+      res.devdoc ??= "";
       res.devdoc += content;
     }
-    if (tag === 'notice' || tag === undefined) {
-      res.userdoc ??= '';
+    if (tag === "notice" || tag === undefined) {
+      res.userdoc ??= "";
       res.userdoc += content;
     }
-    if (tag === 'title') {
+    if (tag === "title") {
       res.title = content;
     }
-    if (tag === 'param') {
+    if (tag === "param") {
       const paramMatches = content.match(/(\w+) ([^]*)/);
       if (paramMatches) {
         const [, param, description] = paramMatches;
         res.params ??= [];
-        res.params.push({ param, description });
+        res.params.push({ param: param ?? "", description: description ?? "" });
       }
     }
-    if (tag === 'return') {
+    if (tag === "return") {
       const paramMatches = content.match(/(\w+) ([^]*)/);
       if (paramMatches) {
         const [, param, description] = paramMatches;
         res.returns ??= [];
-        res.returns.push({ param, description });
+        res.returns.push({
+          param: param ?? "",
+          description: description ?? "",
+        });
       }
     }
-    if (tag === 'inheritdoc') {
+    if (tag === "inheritdoc") {
       if (!(context instanceof SourceFunction)) {
-        throw new Error('@inheritdoc only supported in functions');
+        throw new Error("@inheritdoc only supported in functions");
       }
-      const parentContract = context.contract.file.contractsInScope[content.trim()];
-      inheritFrom = parentContract.functions.find(f => f.name === context.name);
+      const parentContract =
+        context.contract.file.contractsInScope[content.trim()];
+      inheritFrom = parentContract?.functions.find(
+        (f) => f.name === context.name
+      );
     }
-    if (tag?.startsWith('custom:')) {
-      const key = tag.replace(/^custom:/, '');
+    if (tag?.startsWith("custom:")) {
+      const key = tag.replace(/^custom:/, "");
       res.custom ??= {};
-      res.custom[key] ??= '';
+      res.custom[key] ??= "";
       res.custom[key] += content;
     }
   }
@@ -612,7 +655,7 @@ function parseNatSpec(doc: string, context: SourceFunctionLike | SourceContract)
 }
 
 function* execall(re: RegExp, text: string) {
-  re = new RegExp(re, re.flags + (re.sticky ? '' : 'y'));
+  re = new RegExp(re, re.flags + (re.sticky ? "" : "y"));
 
   while (true) {
     const match = re.exec(text);
@@ -620,7 +663,7 @@ function* execall(re: RegExp, text: string) {
     // we break out of the loop if the empty string is matched because no
     // progress will be made and it will loop infinitely
 
-    if (match && match[0] !== '') {
+    if (match && match[0] !== "") {
       yield match;
     } else {
       break;
@@ -632,36 +675,48 @@ interface ToString {
   toString(): string;
 }
 
-function isVariableDeclaration(node: ast.ContractItem): node is ast.VariableDeclaration {
-  return node.nodeType === 'VariableDeclaration';
+function isVariableDeclaration(
+  node: ast.ContractItem
+): node is ast.VariableDeclaration {
+  return node.nodeType === "VariableDeclaration";
 }
 
-function isFunctionDefinition(node: ast.ContractItem): node is ast.FunctionDefinition {
-  return node.nodeType === 'FunctionDefinition';
+function isFunctionDefinition(
+  node: ast.ContractItem
+): node is ast.FunctionDefinition {
+  return node.nodeType === "FunctionDefinition";
 }
 
-function isEventDefinition(node: ast.ContractItem): node is ast.EventDefinition {
-  return node.nodeType === 'EventDefinition';
+function isEventDefinition(
+  node: ast.ContractItem
+): node is ast.EventDefinition {
+  return node.nodeType === "EventDefinition";
 }
 
-function isModifierDefinition(node: ast.ContractItem): node is ast.ModifierDefinition {
-  return node.nodeType === 'ModifierDefinition';
+function isModifierDefinition(
+  node: ast.ContractItem
+): node is ast.ModifierDefinition {
+  return node.nodeType === "ModifierDefinition";
 }
 
-function isStructDefinition(node: ast.ContractItem): node is ast.StructDefinition {
-  return node.nodeType == 'StructDefinition';
+function isStructDefinition(
+  node: ast.ContractItem
+): node is ast.StructDefinition {
+  return node.nodeType == "StructDefinition";
 }
 
 function isEnumDefinition(node: ast.ContractItem): node is ast.EnumDefinition {
-  return node.nodeType == 'EnumDefinition';
+  return node.nodeType == "EnumDefinition";
 }
 
-function isContractDefinition(node: ast.SourceItem): node is ast.ContractDefinition {
-  return node.nodeType === 'ContractDefinition';
+function isContractDefinition(
+  node: ast.SourceItem
+): node is ast.ContractDefinition {
+  return node.nodeType === "ContractDefinition";
 }
 
 function isImportDirective(node: ast.SourceItem): node is ast.ImportDirective {
-  return node.nodeType === 'ImportDirective';
+  return node.nodeType === "ImportDirective";
 }
 
 function oneTimeLogger(msg: string): () => void {
@@ -675,4 +730,6 @@ function oneTimeLogger(msg: string): () => void {
   };
 }
 
-const warnStateVariableNatspec = oneTimeLogger('Warning: NatSpec is currently not available for state variables, structs, or enums.');
+const warnStateVariableNatspec = oneTimeLogger(
+  "Warning: NatSpec is currently not available for state variables, structs, or enums."
+);

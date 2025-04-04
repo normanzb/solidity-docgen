@@ -31,7 +31,7 @@ test('single readme no contracts', t => {
   const sitemap = Sitemap.generate(source, dummyFilter, [emptyReadme()], 'md', 'readmes');
   const { pages: [page] } = sitemap;
 
-  t.is(page.contracts.length, 0);
+  t.is(page?.contracts.length, 0);
 });
 
 test('single readme multiple contracts', t => {
@@ -44,9 +44,9 @@ test('single readme multiple contracts', t => {
   const sitemap = Sitemap.generate(source, dummyFilter, [emptyReadme()], 'md', 'readmes');
   const { pages: [page] } = sitemap;
 
-  t.is(page.contracts.length, 2);
-  t.assert(page.contracts.some(c => c.name === 'Foo'));
-  t.assert(page.contracts.some(c => c.name === 'Bar'));
+  t.is(page?.contracts.length, 2);
+  t.assert(page?.contracts.some(c => c.name === 'Foo'));
+  t.assert(page?.contracts.some(c => c.name === 'Bar'));
 });
 
 test('single source with file multiple contracts', t => {
@@ -75,8 +75,8 @@ test('filter subdirectory', t => {
   const sitemap = Sitemap.generate(source, dummyFilter, [emptyReadme('sub')], 'md', 'readmes');
   const { pages: [page] } = sitemap;
 
-  t.is(page.contracts.length, 1);
-  t.is(page.contracts[0].name, 'Bar');
+  t.is(page?.contracts.length, 1);
+  t.is(page?.contracts[0]?.name, 'Bar');
 });
 
 test('filter nested subdirectories', t => {
@@ -90,9 +90,9 @@ test('filter nested subdirectories', t => {
   const sitemap = Sitemap.generate(source, dummyFilter, [emptyReadme('sub')], 'md', 'readmes');
   const { pages: [page] } = sitemap;
 
-  t.is(page.contracts.length, 2);
-  t.assert(page.contracts.some(c => c.name === 'Bar'));
-  t.assert(page.contracts.some(c => c.name === 'Foo'));
+  t.is(page?.contracts.length, 2);
+  t.assert(page?.contracts.some(c => c.name === 'Bar'));
+  t.assert(page?.contracts.some(c => c.name === 'Foo'));
 });
 
 test('links', t => {
@@ -104,19 +104,27 @@ test('links', t => {
   );
 
   const sitemap = Sitemap.generate(source, dummyFilter, [emptyReadme('sub1'), emptyReadme('sub2')], 'md', 'readmes');
-  const links = sitemap.links(sitemap.pages[0]);
+
+  const page = sitemap.pages[0]
+
+  if (!page) {
+    t.fail('No pages');
+    return;
+  }
+
+  const links = sitemap.links(page);
 
   t.is(links.length, 2);
 
   const bar = links[0];
-  t.is(bar.target.name, 'Bar');
-  t.is(bar.path, 'sub1.md');
-  t.is(bar.relativePath, '');
+  t.is(bar?.target.name, 'Bar');
+  t.is(bar?.path, 'sub1.md');
+  t.is(bar?.relativePath, '');
 
   const foo = links[1];
-  t.is(foo.target.name, 'Foo');
-  t.is(foo.path, 'sub2.md');
-  t.is(foo.relativePath, 'sub2.md');
+  t.is(foo?.target.name, 'Foo');
+  t.is(foo?.path, 'sub2.md');
+  t.is(foo?.relativePath, 'sub2.md');
 });
 
 function buildSoliditySource(builder?: (b: SolcOutputBuilder) => void): Source {

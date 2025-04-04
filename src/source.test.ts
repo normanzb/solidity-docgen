@@ -49,7 +49,7 @@ test('one own function', t => {
 
   const foo = source.contracts[0];
 
-  t.is(foo.functions.length, 1);
+  t.is(foo?.functions.length, 1);
 });
 
 test('one inherited function', t => {
@@ -63,7 +63,7 @@ test('one inherited function', t => {
 
   const bar = source.contracts[1];
 
-  t.is(bar.functions.length, 1);
+  t.is(bar?.functions.length, 1);
 });
 
 test('one multiply inherited function', t => {
@@ -78,8 +78,8 @@ test('one multiply inherited function', t => {
   const source = buildSource(solcOutput);
 
   const bar = source.contracts[2];
-  t.is(bar.name, 'Bar');
-  t.is(bar.functions.length, 1);
+  t.is(bar?.name, 'Bar');
+  t.is(bar?.functions.length, 1);
 });
 
 test('two inherited functions with name overloading', t => {
@@ -92,7 +92,7 @@ test('two inherited functions with name overloading', t => {
 
   const source = buildSource(solcOutput);
   const foof = source.contracts[1];
-  t.is(foof.functions.length, 2);
+  t.is(foof?.functions.length, 2);
 });
 
 test('grouped inherited items', t => {
@@ -106,12 +106,12 @@ test('grouped inherited items', t => {
 
   const source = buildSource(solcOutput);
   const child = source.contracts[2];
-  t.is(child.name, 'Child');
+  t.is(child?.name, 'Child');
 
-  const items = child.inheritedItems;
-  t.is(items.length, 3);
-  t.is(items[1].contract.name, 'Foo');
-  t.is(items[1].functions[0].name, 'foo-test');
+  const items = child?.inheritedItems;
+  t.is(items?.length, 3);
+  t.is(items?.[1]?.contract?.name, 'Foo');
+  t.is(items?.[1]?.functions?.[0]?.name, 'foo-test');
 });
 
 test('two inherited constructors', t => {
@@ -124,8 +124,8 @@ test('two inherited constructors', t => {
 
   const source = buildSource(solcOutput);
   const foof = source.contracts[1];
-  t.is(foof.name, 'FooFlavor');
-  t.is(foof.functions.length, 1);
+  t.is(foof?.name, 'FooFlavor');
+  t.is(foof?.functions.length, 1);
 });
 
 test('a state variable', t => {
@@ -136,10 +136,10 @@ test('a state variable', t => {
 
   const source = buildSource(solcOutput);
   const foo = source.contracts[0];
-  t.is(foo.variables.length, 1);
-  const variable = foo.variables[0];
-  t.is(variable.name, 'x');
-  t.is(variable.type, 'uint256');
+  t.is(foo?.variables.length, 1);
+  const variable = foo?.variables[0];
+  t.is(variable?.name, 'x');
+  t.is(variable?.type, 'uint256');
 });
 
 test('an inherited state variable', t => {
@@ -152,11 +152,11 @@ test('an inherited state variable', t => {
 
   const source = buildSource(solcOutput);
   const foo = source.contracts[1];
-  t.is(foo.name, 'Bar');
-  t.is(foo.variables.length, 2);
-  const variable = foo.variables[1];
-  t.is(variable.name, 'x');
-  t.is(variable.type, 'uint256');
+  t.is(foo?.name, 'Bar');
+  t.is(foo?.variables.length, 2);
+  const variable = foo?.variables[1];
+  t.is(variable?.name, 'x');
+  t.is(variable?.type, 'uint256');
 });
 
 test('contracts in scope from imported files', t => {
@@ -251,17 +251,17 @@ test('using real compiler output (0.6)', async t => {
 
   const foo = source.contracts[0];
 
-  t.deepEqual(['x'],    foo.variables.map(getName));
-  t.deepEqual(['fun', 'receive'],  foo.functions.map(getName));
-  t.deepEqual(['mod'],  foo.modifiers.map(getName));
-  t.deepEqual(['Ev'],   foo.events.map(getName));
+  t.deepEqual(['x'],    foo?.variables.map(getName));
+  t.deepEqual(['fun', 'receive'],  foo?.functions.map(getName));
+  t.deepEqual(['mod'],  foo?.modifiers.map(getName));
+  t.deepEqual(['Ev'],   foo?.events.map(getName));
 
-  const fun = foo.functions[0];
-  t.is('public', fun.visibility);
-  t.deepEqual(['uint256 a'], Array.from(fun.args, a => a.toString()));
-  t.deepEqual(['uint256 r'], Array.from(fun.outputs, a => a.toString()));
-  t.is('docs', fun.natspec.devdoc);
+  const fun = foo?.functions[0];
+  t.is('public', fun?.visibility);
+  t.deepEqual(['uint256 a'], Array.from(fun?.args ?? [], a => a.toString()));
+  t.deepEqual(['uint256 r'], Array.from(fun?.outputs ?? [], a => a.toString()));
+  t.is('docs', fun?.natspec.devdoc);
 
-  const mod = foo.functions[0];
-  t.deepEqual(['uint256 a'], Array.from(mod.args, a => a.toString()));
+  const mod = foo?.functions[0];
+  t.deepEqual(['uint256 a'], Array.from(mod?.args ?? [], a => a.toString()));
 });

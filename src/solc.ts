@@ -52,6 +52,7 @@ export namespace ast {
     nodeType: 'VariableDeclaration';
     visibility: 'internal' | 'public' | 'private';
     name: string;
+    documentation: string | null;
     constant: boolean;
     typeName: TypeName;
   }
@@ -147,7 +148,7 @@ export async function compile(
   const { errors: allErrors } = solcOutput;
   if (allErrors && allErrors.some(e => e.severity === 'error')) {
     const errors = allErrors.filter(e => e.severity === 'error');
-    const firstError = errors[0].formattedMessage;
+    const firstError = errors[0]?.formattedMessage ?? "";
     const moreErrors = errors.length === 1 ? '' : ` (And ${errors.length - 1} other errors...)`;
     throw new Error(`Solidity was unable to compile. ${firstError}${moreErrors}`);
   }
@@ -253,8 +254,14 @@ class ASTReader {
   private decodeSrc(src: string): { source: string; start: number; length: number } {
     const [start, length, sourceId] = src.split(':').map(s => parseInt(s));
     const source = Object.keys(this.output.sources).find(s => this.output.sources[s].id === sourceId);
-    if (source === undefined) {
+    if (source == null) {
       throw new Error(`No source with id ${sourceId}`);
+    }
+    if (start == null) {
+      throw new Error(`No start for source ${source}`);
+    }
+    if (length == null) {
+      throw new Error(`No length for source ${source}`);
     }
     return { source, start, length };
   }

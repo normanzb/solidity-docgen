@@ -1,4 +1,4 @@
-import { SolcOutput, ast } from './solc';
+import { SolcOutput, ast } from "./solc";
 
 // fake solc output builder for tests
 export class SolcOutputBuilder implements SolcOutput {
@@ -23,7 +23,7 @@ export class SolcOutputBuilder implements SolcOutput {
     this._currentFile = fileName;
     this.sources[fileName] = {
       ast: {
-        nodeType: 'SourceUnit',
+        nodeType: "SourceUnit",
         nodes: [],
         id: this._getNextId(),
       },
@@ -33,36 +33,43 @@ export class SolcOutputBuilder implements SolcOutput {
 
   import(importedFileName: string, aliases: [string, string?][] = []) {
     const importedSourceUnit = this.sources[importedFileName]?.ast;
-    if (importedSourceUnit === undefined) throw new Error('Imported file does not exist');
+    if (importedSourceUnit === undefined)
+      throw new Error("Imported file does not exist");
     const fileName = this._currentFile;
-    if (fileName === undefined) throw new Error('No file defined');
+    if (fileName === undefined) throw new Error("No file defined");
     const astNode: ast.ImportDirective = {
-      nodeType: 'ImportDirective',
+      nodeType: "ImportDirective",
       id: this._getNextId(),
       sourceUnit: importedSourceUnit.id,
-      symbolAliases: aliases.map(([name, local]) => ({ foreign: { name }, local })),
+      symbolAliases: aliases.map(([name, local]) => ({
+        foreign: { name },
+        local,
+      })),
     };
-    this.sources[fileName].ast.nodes.push(astNode);
+    this.sources[fileName]?.ast.nodes.push(astNode);
     return this;
   }
 
   contract(contractName: string, ...baseContracts: string[]) {
     const fileName = this._currentFile;
-    if (fileName === undefined) throw new Error('No file defined');
+    if (fileName === undefined) throw new Error("No file defined");
     const id = this._getContractId(contractName);
+    if (id === undefined) throw new Error("No contract id");
     const astNode: ast.ContractDefinition = {
-      nodeType: 'ContractDefinition',
+      nodeType: "ContractDefinition",
       name: contractName,
       documentation: null,
       id,
       linearizedBaseContracts: [id].concat(
         // this isn't really linearizing, but it'll do
-        baseContracts.map(name => this._getContractId(name))
+        baseContracts
+          .map((name) => this._getContractId(name))
+          .filter((id): id is number => id !== undefined)
       ),
       nodes: [],
     };
     this._currentContract = { astNode };
-    this.sources[fileName].ast.nodes.push(astNode);
+    this.sources[fileName]?.ast.nodes.push(astNode);
     return this;
   }
 
@@ -84,22 +91,22 @@ export class SolcOutputBuilder implements SolcOutput {
 
   function(functionName: string, ...argTypes: string[]) {
     const contract = this._currentContract;
-    if (contract === undefined) throw new Error('No contract defined');
+    if (contract === undefined) throw new Error("No contract defined");
     const kind =
-      functionName === 'fallback' || functionName === 'constructor'
-      ? functionName
-      : 'function';
+      functionName === "fallback" || functionName === "constructor"
+        ? functionName
+        : "function";
     const astNode: ast.FunctionDefinition = {
-      nodeType: 'FunctionDefinition',
+      nodeType: "FunctionDefinition",
       kind,
-      visibility: 'public',
+      visibility: "public",
       name: functionName,
       documentation: null,
       parameters: {
-        parameters: argTypes.map(t => ({
-          name: '',
+        parameters: argTypes.map((t) => ({
+          name: "",
           typeName: {
-            nodeType: 'ElementaryTypeName',
+            nodeType: "ElementaryTypeName",
             typeDescriptions: {
               typeString: t,
             },
@@ -116,19 +123,20 @@ export class SolcOutputBuilder implements SolcOutput {
 
   variable(variableName: string, typeString: string) {
     const contract = this._currentContract;
-    if (contract === undefined) throw new Error('No contract defined');
+    if (contract === undefined) throw new Error("No contract defined");
     const astNode: ast.VariableDeclaration = {
-      nodeType: 'VariableDeclaration',
-      visibility: 'public',
+      nodeType: "VariableDeclaration",
+      visibility: "public",
       name: variableName,
+      documentation: null,
       constant: false,
       typeName: {
-        nodeType: 'ElementaryTypeName',
+        nodeType: "ElementaryTypeName",
         typeDescriptions: {
           typeString,
         },
       },
-    }
+    };
     contract.astNode.nodes.push(astNode);
     return this;
   }
