@@ -22,4 +22,16 @@ contract X {
      * A function
      */
     function foo() external {}
+
+    /**
+     * @notice this is a struct
+     * @param a is a uint256
+     * @param b is a address
+     * @param c is a string
+     */
+    struct TheStruct {
+        uint256 a;
+        address b;
+        string c;
+    }
 }

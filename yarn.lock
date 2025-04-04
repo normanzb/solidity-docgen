@@ -2911,18 +2911,16 @@ slice-ansi@^3.0.0:
     semver "^5.5.0"
     tmp "0.0.33"
 
-"solc-0-8@npm:solc@^0.8.2":
-  version "0.8.11"
-  resolved "https://registry.npmjs.org/solc/-/solc-0.8.11.tgz"
-  integrity sha512-CdK4pk6VZowmXv7l4lftbr/QUWsHEr+xcdcGHJVgynD08gRwFT4zAFCb3b/eR0FUVVszcHulpGJwEoKRKKrnKw==
+"solc-0-8@npm:solc@^0.8.29":
+  version "0.8.29"
+  resolved "https://registry.npmjs.org/solc/-/solc-0.8.29.tgz"
+  integrity sha512-M1hmcsejAtT1RWC+wy45Oi8a82nSnDl65wDzA3/8uWTC7R7VcnrMVIHv6/LHqnQPZ7OM2RIeKh3zpNo4E5lYbw==
   dependencies:
     command-exists "^1.2.8"
     commander "^8.1.0"
     follow-redirects "^1.12.1"
-    fs-extra "^0.30.0"
     js-sha3 "0.8.0"
     memorystream "^0.3.1"
-    require-from-string "^2.0.0"
     semver "^5.5.0"
     tmp "0.0.33"
 

@@ -400,16 +400,21 @@ class SourceStructVariable {
     return this.astNode.typeName.typeDescriptions.typeString;
   }
 
-  @memoize
   get natspec(): NatSpec {
-    if (
-      this.astNode.documentation === null ||
-      this.astNode.documentation === undefined
-    ) {
+    const parent = this.struct.natspec;
+    const params = parent.params ?? [];
+
+    const paramObject = params.find(
+      (paramObject) => paramObject.param === this.name
+    );
+
+    if (!paramObject) {
       return {};
     }
 
-    return parseNatSpec(this.astNode.documentation, this);
+    return {
+      devdoc: paramObject.description,
+    };
   }
 }
 
@@ -479,9 +484,16 @@ class SourceStruct extends SourceContractItem {
     return this.astNode.members.map((m) => new SourceStructVariable(this, m));
   }
 
-  get natspec(): {} {
-    warnStateVariableNatspec();
-    return {};
+  @memoize
+  get natspec(): NatSpec {
+    if (
+      this.astNode.documentation === null ||
+      this.astNode.documentation === undefined
+    ) {
+      return {};
+    }
+
+    return parseNatSpec(this.astNode.documentation, this);
   }
 }
 
@@ -583,7 +595,7 @@ interface NatSpec {
 
 function parseNatSpec(
   doc: string,
-  context: SourceFunctionLike | SourceContract | SourceStructVariable
+  context: SourceFunctionLike | SourceContract | SourceStruct
 ): NatSpec {
   const res: NatSpec = {};
 
